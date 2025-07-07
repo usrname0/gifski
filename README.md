@@ -1,6 +1,6 @@
 ## Gifski fork with Custom Delay Feature
 
-This fork adds a `--delay` flag so you can specify custom frame delays via filename.  This works for me on Windows 11 but for now it is "compile and use at your own risk."
+This fork adds a `--delay` flag so you can specify custom frame delays via filename.  This works for me on Windows 11 and that's as far as I'm going with this one.  I'll throw up a "release" just in case someone wants to use this without setting up rust to compile it.  "Use at your own risk."
 
 Usage:
 ```bash
