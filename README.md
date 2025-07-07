@@ -1,3 +1,25 @@
+## Gifski fork with Custom Delay Feature
+
+This fork adds a `--delay` flag that allows specifying custom frame delays via filenames.  This works for me on Windows 11 but for now it is "compile and use at your own risk."
+
+Usage:
+```bash
+gifski --delay -o output.gif frame001(500).png frame002(1000).png frame003.png
+```
+
+* frame001(500).png displays for 500ms
+* frame002(1000).png displays for 1000ms
+* frame003.png uses default FPS timing
+* etc.
+
+More Usage:
+```bash
+gifski --delay --fps 24 --width 960 -o ../test.gif --quality 99 *.png
+```
+I tend to just prepare a whole folder and then run gifski in that folder. And now my odd timings can be pre-prepared via filename so it just works.
+
+The rest of this readme is the OG Gifski page with the OG Gifski links.  I'm leaving it because I don't know how forks are supposed to work:
+
 # [<img width="100%" src="https://gif.ski/gifski.svg" alt="gif.ski">](https://gif.ski)
 
 Highest-quality GIF encoder based on [pngquant](https://pngquant.org).
