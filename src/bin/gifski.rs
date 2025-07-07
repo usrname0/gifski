@@ -148,6 +148,13 @@ fn bin_main() -> BinResult<()> {
                             .num_args(0)
                             .action(ArgAction::SetTrue)
                             .help("Do not display anything on standard output/console"))
+                        .arg(Arg::new("delay")
+                            .long("delay")
+                            .num_args(0)
+                            .action(ArgAction::SetTrue)
+                            .help("Enable reading custom frame delays from filename. \
+                                   Filenames like 'frame(1500).png' will have 1500ms delay. \
+                                   Files without delay in parentheses use the default FPS timing."))
                         .arg(Arg::new("FILES")
                             .help(VIDEO_FRAMES_ARG_HELP)
                             .num_args(1..)
@@ -199,10 +206,20 @@ fn bin_main() -> BinResult<()> {
 
     let mut frames: Vec<&str> = matches.get_many::<String>("FILES").ok_or("?")?.map(|s| s.as_str()).collect();
     let bounce = matches.get_flag("bounce");
+    let delay_mode = matches.get_flag("delay");
+    
     if !matches.get_flag("nosort") && frames.len() > 1 {
         frames.sort_by(|a, b| natord::compare(a, b));
     }
-    let mut frames: Vec<_> = frames.into_iter().map(PathBuf::from).collect();
+    
+    // Extract delays if delay mode is enabled
+    let (frames_with_delays, has_custom_delays) = if delay_mode {
+        extract_delays_from_filenames(frames)
+    } else {
+        (frames.into_iter().map(|f| (f, None)).collect(), false)
+    };
+    
+    let mut frames: Vec<_> = frames_with_delays.iter().map(|(f, _)| PathBuf::from(f)).collect();
 
     let output_path = DestPath::new(matches.get_one::<PathBuf>("output").ok_or("?")?);
     let width = matches.get_one::<u32>("width").copied();
@@ -328,7 +345,13 @@ fn bin_main() -> BinResult<()> {
                 },
                 FileType::GIF => return unexpected("GIF"),
                 FileType::Y4M => return unexpected("Y4M"),
-                _ => Box::new(png::Lodecoder::new(frames, rate)),
+                _ => {
+                    if delay_mode && has_custom_delays {
+                        Box::new(png::Lodecoder::new_with_delays(frames, rate, frames_with_delays.into_iter().map(|(_, delay)| delay).collect()))
+                    } else {
+                        Box::new(png::Lodecoder::new(frames, rate))
+                    }
+                },
             }
         };
 
@@ -401,6 +424,39 @@ fn bin_main() -> BinResult<()> {
     Ok(())
     })
 }
+
+/// Extract delay values from filenames in the format "filename(delay).ext"
+/// Returns (filename_without_delay, delay_in_ms)
+fn extract_delays_from_filenames(frames: Vec<&str>) -> (Vec<(&str, Option<u32>)>, bool) {
+    let mut has_custom_delays = false;
+    let frames_with_delays: Vec<(&str, Option<u32>)> = frames.into_iter().map(|filename| {
+        if let Some(delay) = extract_delay_from_filename(filename) {
+            has_custom_delays = true;
+            (filename, Some(delay))
+        } else {
+            (filename, None)
+        }
+    }).collect();
+    
+    (frames_with_delays, has_custom_delays)
+}
+
+/// Extract delay from filename like "frame(1500).png" -> Some(1500)
+fn extract_delay_from_filename(filename: &str) -> Option<u32> {
+    let path = std::path::Path::new(filename);
+    let stem = path.file_stem()?.to_str()?;
+    
+    // Look for pattern like "basename(delay)"
+    if let Some(start) = stem.rfind('(') {
+        if let Some(end) = stem[start..].find(')') {
+            let delay_str = &stem[start + 1..start + end];
+            return delay_str.parse::<u32>().ok();
+        }
+    }
+    None
+}
+
+// ... rest of the existing functions remain the same ...
 
 fn check_errors(err1: Result<(), gifski::Error>, err2: BinResult<()>) -> BinResult<()> {
     use gifski::Error::*;
@@ -664,4 +720,13 @@ impl ProgressReporter for ProgressBar {
     fn done(&mut self, msg: &str) {
         self.pb.finish_print(msg);
     }
+}
+
+#[test]
+fn test_extract_delay_from_filename() {
+    assert_eq!(extract_delay_from_filename("frame(1500).png"), Some(1500));
+    assert_eq!(extract_delay_from_filename("test(200).jpg"), Some(200));
+    assert_eq!(extract_delay_from_filename("frame.png"), None);
+    assert_eq!(extract_delay_from_filename("frame(abc).png"), None);
+    assert_eq!(extract_delay_from_filename("frame(1500)extra.png"), Some(1500));
 }
